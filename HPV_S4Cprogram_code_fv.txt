@@ -1,0 +1,1720 @@
+####################################HPV S4C program analysis#############################################
+##Set path
+setwd()
+
+## Loading R packages
+rm(list =ls())
+library(tidyverse)
+library(dplyr)
+library(tidyr)
+library(tableone)
+library(lme4)
+library(lmerTest)
+library(broom.mixed)
+library(geepack)
+library(forestplot)
+library(grid)
+library(gtable)
+library(ggthemes)
+library(patchwork) 
+
+
+## Loading the database ####
+alldata <- read.csv("HPV_S4Cprogramme_rawdata.csv") #n=1207
+sub_alldata <- alldata %>% filter(!is.na(dose_m6))#n=1162
+#Sample size for the primary analysis: n = 1162
+
+## Classification of Variables
+colnames(sub_alldata)
+num <- c('age', 'score_m0', 'score_m3', 'score_m6',"p_age")
+for (i in num) {
+  sub_alldata[, i] <- as.numeric(sub_alldata[, i])
+}
+
+categ <- c("school","group","grade","race","economic",
+           "p_gender_cat","p_race_cat","p_education_cat",
+           "p_residence_cat","p_marriage_cat","p_income_cat",
+           "p2_1", "p2_5", "p2_7", 
+           "p2_1_m3","p2_2_m3","p2_3a_m3","p2_3b_m3","p2_3c_m3","p2_3d_m3",
+           "dose_m0","will_m0", "appoint_m0",
+           "dose_m3","will_m3","appoint_m3",
+           "dose_m6","will_m6","appoint_m6",
+           "q1", "q2", "q3", "q4", "q5", "q6","q7",
+           "q1_m3","q2_m3","q3_m3","q4_m3","q5_m3","q6_m3","q7_m3",
+           "q1_m6","q2_m6","q3_m6","q4_m6","q5_m6","q6_m6","q7_m6"
+)
+for (i in categ) {
+  sub_alldata[, i] <- as.factor(sub_alldata[, i])
+}
+
+##1 Compare Baseline Characteristics ####
+##1.1 Cluster level-student####
+# Grouped by school
+school_counts <- sub_alldata %>%
+  group_by(school, group) %>%
+  summarise(students = n()) %>% ungroup()
+
+group_stats <- school_counts %>%
+  group_by(group) %>%
+  summarise(
+    median_s = median(students),
+    min_s = min(students),
+    max_s = max(students),
+    range_s = paste0(min(students), "-", max(students))
+  )
+print(group_stats)
+
+# overall
+overall <- school_counts %>%
+  summarise(
+    median_all = median(students),
+    min_all = min(students),
+    max_all = max(students),
+    range_all = paste0(min(students), "-", max(students))
+  )
+print(overall)
+
+##1.2 individual level-student####
+myVars <- c("grade", "race", "age", "p2_1", "p2_5", "p2_7")
+catVars <- c("grade", "race", "p2_1", "p2_5", "p2_7")
+table1 <- CreateTableOne(vars = myVars,
+                         strata = "group",
+                         data = sub_alldata,
+                         factorVars = catVars,
+                         addOverall = TRUE,
+                         smd = FALSE)
+table1 <- print(table1, 
+                contDigits = 1, 
+                catDigits = 1, 
+                pDigits = 4, 
+                showAllLevels = TRUE, 
+                printToggle = FALSE)
+
+##1.3 Cluster level-parent####
+p_data <- sub_alldata %>% filter(!is.na(p_id))
+# Grouped by school
+school_counts <- p_data %>%
+  group_by(school, group) %>%
+  summarise(students = n()) %>% ungroup()
+
+group_stats <- school_counts %>%
+  group_by(group) %>%
+  summarise(
+    median_s = median(students),
+    min_s = min(students),
+    max_s = max(students),
+    range_s = paste0(min(students), "-", max(students))
+  )
+print(group_stats)
+
+# overall
+overall <- school_counts %>%
+  summarise(
+    median_all = median(students),
+    min_all = min(students),
+    max_all = max(students),
+    range_all = paste0(min(students), "-", max(students))
+  )
+print(overall)
+
+##1.4 individual level-parent####
+colnames(p_data)
+myVars <- c("p_gender_cat","p_age","p_race_cat","p_residence_cat",
+            "p_marriage_cat","p_income_cat")
+catVars <- c("p_gender_cat","p_race_cat","p_residence_cat",
+             "p_marriage_cat","p_income_cat")
+table2 <- CreateTableOne(vars = myVars,
+                         strata = "group",
+                         data = p_data,
+                         factorVars = catVars,
+                         addOverall = TRUE,
+                         smd = FALSE)
+table2 <- print(table2, 
+                contDigits = 1, 
+                catDigits = 1, 
+                pDigits = 4, 
+                showAllLevels = TRUE, 
+                printToggle = FALSE)
+
+##2 Evaluation of Research Outcomes####
+## 2.1 outcomes at M6####
+myVars <- c("dose_m6","appoint_m6","will_m6","score_m6")
+catVars <- c("dose_m6","appoint_m6","will_m6")
+table3 <- CreateTableOne(vars = myVars,
+                         strata = "group",
+                         data = sub_alldata,
+                         factorVars = catVars,
+                         addOverall = TRUE,
+                         smd = FALSE)
+table3 <- print(table3, 
+                contDigits = 1, 
+                catDigits = 1, 
+                pDigits = 4, 
+                showAllLevels = TRUE, 
+                printToggle = FALSE)
+
+## Excluding baseline appointments (42 people)
+sub_alldata_del <- sub_alldata %>% filter(appoint_m0 != 1)
+
+myVars <- c("will_m0", "appoint_m0","score_m0",
+            "will_m6","appoint_m6","score_m6",
+            "q1", "q2", "q3", "q4", "q5", "q6","q7",
+            "q1_m6","q2_m6","q3_m6","q4_m6","q5_m6","q6_m6","q7_m6")
+catVars <- c("will_m0", "appoint_m0","will_m6","appoint_m6",
+             "q1", "q2", "q3", "q4", "q5", "q6","q7",
+             "q1_m6","q2_m6","q3_m6","q4_m6","q5_m6","q6_m6","q7_m6")
+table4 <- CreateTableOne(vars = myVars,
+                         strata = "group",
+                         data = sub_alldata_del,
+                         factorVars = catVars,
+                         addOverall = TRUE,
+                         smd = FALSE)
+table4 <- print(table4, 
+                contDigits = 1, 
+                catDigits = 1, 
+                pDigits = 4, 
+                showAllLevels = TRUE, 
+                printToggle = FALSE)
+
+## 2.2 GLMM-HPV vaccine####
+sub_alldata <- sub_alldata %>%
+  mutate(p_education_cat = ifelse(is.na(p_education_cat), '3', p_education_cat))
+# 3==missing
+table(sub_alldata$p_education_cat)
+
+# Define the function
+extract_fixed1 <- function(model, model_name) {
+  coef_sum <- summary(model)$coefficients
+  OR <- exp(coef_sum[, "Estimate"])
+  CI_low <- exp(coef_sum[, "Estimate"] - 1.96 * coef_sum[, "Std. Error"])
+  CI_up <- exp(coef_sum[, "Estimate"] + 1.96 * coef_sum[, "Std. Error"])
+  p_val <- coef_sum[, "Pr(>|z|)"]
+  
+  result <- data.frame(
+    Model = model_name,
+    Variable = rownames(coef_sum),
+    OR = sprintf("%.2f", OR),
+    CI = sprintf("(%.2f, %.2f)", CI_low, CI_up),
+    P_value = sprintf("%.3f", p_val),
+    stringsAsFactors = FALSE
+  )
+  result$Variable[result$Variable == "(Intercept)"] <- "Intercept"
+  return(result)
+}
+
+set.seed(2026)
+
+# Model1：dose_m6 ~ group + economic + (1|school)
+model1 <- glmer(dose_m6 ~ group + economic + (1 | school),
+                data = sub_alldata,
+                family = binomial(link = "log"),
+                control = glmerControl(optimizer = "bobyqa", 
+                                       optCtrl = list(maxfun = 2e5),
+                                       check.conv.grad = .makeCC("warning", tol = 1e-3, relTol = NULL)),
+                na.action = na.omit)
+
+# Model3：additionally adjust parental education,students' age, grade, and race
+model2 <- update(model1, . ~ . + p_education_cat + age + grade + race)
+
+# results
+result1 <- extract_fixed1(model1, "Model 1")
+result2 <- extract_fixed1(model2, "Model 2")
+
+# Merger results
+all_results_dose <- bind_rows(result1, result2)
+
+## 2.3 GLMM-HPV appointment####
+set.seed(2026)
+# Model1：appoint_m6 ~ group + economic + (1|school)
+model1 <- glmer(appoint_m6 ~ group + economic + (1 | school),
+                data = sub_alldata_del,
+                family = binomial(link = "log"),
+                control = glmerControl(optimizer = "bobyqa", 
+                                       optCtrl = list(maxfun = 2e5),
+                                       check.conv.grad = .makeCC("warning", tol = 1e-3, relTol = NULL)),
+                na.action = na.omit)
+
+# Model2：additionally adjust age + grade + race + p_education_cat
+model2 <- update(model1, . ~ . + age + grade + race + p_education_cat)
+
+# results
+result1 <- extract_fixed1(model1, "Model 1")
+result2 <- extract_fixed1(model2, "Model 2")
+
+# Merger results
+all_results_appoint <- bind_rows(result1, result2)
+
+## 2.4 GLMM-intention to uptake####
+# model1：will_m6 ~ group + economic + will_m0 + (1|school)
+model1 <- glmer(will_m6 ~ group + economic + will_m0 + (1 | school),
+                data = sub_alldata_del,
+                family = binomial(link = "logit"),
+                control = glmerControl(optimizer = "bobyqa", 
+                                       optCtrl = list(maxfun = 2e5),
+                                       check.conv.grad = .makeCC("warning", tol = 1e-3, relTol = NULL)),
+                na.action = na.omit)
+
+# model2：additionally adjust age + grade + race + p_education_cat
+model2 <- update(model1, . ~ . + age + grade + race + p_education_cat)
+
+# results
+result1 <- extract_fixed1(model1, "Model 1")
+result2 <- extract_fixed1(model2, "Model 2")
+
+# Merger results
+all_results_will <- bind_rows(result1, result2)
+
+## 2.4 GLMM-HPV-related knowledge####
+# Define an extraction function
+extract_fixed2 <- function(model, model_name) {
+  coef_sum <- summary(model)$coefficients
+  est <- coef_sum[, "Estimate"]
+  se <- coef_sum[, "Std. Error"]
+  CI_low <- est - 1.96 * se
+  CI_up <- est + 1.96 * se
+  p_val <- coef_sum[, "Pr(>|t|)"]
+  
+  result <- data.frame(
+    Model = model_name,
+    Variable = rownames(coef_sum),
+    Estimate = sprintf("%.2f", est),
+    CI = sprintf("(%.2f, %.2f)", CI_low, CI_up),
+    P_value = ifelse(p_val < 0.001, "<0.001", sprintf("%.3f", p_val)),
+    stringsAsFactors = FALSE
+  )
+  return(result)
+}
+
+set.seed(2026)
+# model1：score_m6 ~ group + economic + score_m0 + (1|school)
+model1 <- lmer(score_m6 ~ group + economic + score_m0 + (1 | school),
+               data = sub_alldata_del,
+               na.action = na.omit,
+               REML = TRUE)
+
+# model2：additionally adjust age + grade + race
+model2 <- update(model1, . ~ . + age + grade + race + p_education_cat)
+
+# results
+result1 <- extract_fixed2(model1, "Model 1")
+result2 <- extract_fixed2(model2, "Model 2")
+
+# Merger results
+all_results_score <- bind_rows(result1, result2)
+
+## Combine all results and output
+all_results <- bind_rows(all_results_dose, all_results_appoint, all_results_will, all_results_score)
+write.csv(all_results, file = "HPV_results_4models.csv", row.names = TRUE)
+
+##3 GLMM:Sensitivity Analysis-adherence####
+# adherence for intervention(p2_2_m3) completed 12 videos 1 else 2
+ad_alldata <- subset(sub_alldata, !(group == "intervention" & p2_2_m3 == 2)) #N=1077
+ad_alldata_del <- subset(sub_alldata_del, !(group == "intervention" & p2_2_m3 == 2))#N=1037
+
+set.seed(2026)
+##vaccine uptake
+model1 <- glmer(dose_m6 ~ group + economic + (1 | school),
+                data = ad_alldata,
+                family = binomial(link = "log"),
+                control = glmerControl(optimizer = "bobyqa", 
+                                       optCtrl = list(maxfun = 2e5),
+                                       check.conv.grad = .makeCC("warning", tol = 1e-3, relTol = NULL)),
+                na.action = na.omit)
+
+result1 <- extract_fixed1(model1, "Model 1")
+
+##appointment
+model2 <- glmer(appoint_m6 ~ group + economic + (1 | school),
+                data = ad_alldata_del,
+                family = binomial(link = "log"),
+                control = glmerControl(optimizer = "bobyqa", 
+                                       optCtrl = list(maxfun = 2e5),
+                                       check.conv.grad = .makeCC("warning", tol = 1e-3, relTol = NULL)),
+                na.action = na.omit)
+
+result2 <- extract_fixed1(model2, "Model 2")
+
+##intention
+model3 <- glmer(will_m6 ~ group + economic + will_m0  + (1 | school),
+                data = ad_alldata_del,
+                family = binomial(link = "logit"),
+                control = glmerControl(optimizer = "bobyqa", 
+                                       optCtrl = list(maxfun = 2e5),
+                                       check.conv.grad = .makeCC("warning", tol = 1e-3, relTol = NULL)),
+                na.action = na.omit)
+
+result3 <- extract_fixed1(model3, "Model 3")
+
+#knowledge score
+model4 <- lmer(score_m6 ~ group + economic + score_m0 + (1 | school),
+               data = ad_alldata_del,
+               na.action = na.omit,
+               REML = TRUE)
+
+result4 <- extract_fixed2(model4, "Model 4")
+
+## merge
+adherence_results <- bind_rows(result1, result2, result3, result4)
+
+##4 GLMM:Sensitivity Analysis-age 12-14####
+age_alldata <- subset(sub_alldata, !(age == 11))
+age_alldata <- subset(age_alldata, !(age == 15))
+age_alldata <- subset(age_alldata, !(age == 16))
+
+age_alldata_del <- subset(age_alldata, !(appoint_m0 == 1))
+
+set.seed(2026)
+##vaccine uptake
+model1 <- glmer(dose_m6 ~ group + economic + (1 | school),
+                data = age_alldata,
+                family = binomial(link = "log"),
+                control = glmerControl(optimizer = "bobyqa", 
+                                       optCtrl = list(maxfun = 2e5),
+                                       check.conv.grad = .makeCC("warning", tol = 1e-3, relTol = NULL)),
+                na.action = na.omit)
+
+result1 <- extract_fixed1(model1, "Model 1")
+
+##appointment
+model2 <- glmer(appoint_m6 ~ group + economic + (1 | school),
+                data = age_alldata_del,
+                family = binomial(link = "log"),
+                control = glmerControl(optimizer = "bobyqa", 
+                                       optCtrl = list(maxfun = 2e5),
+                                       check.conv.grad = .makeCC("warning", tol = 1e-3, relTol = NULL)),
+                na.action = na.omit)
+
+result2 <- extract_fixed1(model2, "Model 2")
+
+##intention
+model3 <- glmer(will_m6 ~ group + economic + will_m0  + (1 | school),
+                data = age_alldata_del,
+                family = binomial(link = "logit"),
+                control = glmerControl(optimizer = "bobyqa", 
+                                       optCtrl = list(maxfun = 2e5),
+                                       check.conv.grad = .makeCC("warning", tol = 1e-3, relTol = NULL)),
+                na.action = na.omit)
+
+result3 <- extract_fixed1(model3, "Model 3")
+
+#knowledge score
+model4 <- lmer(score_m6 ~ group + economic + score_m0 + (1 | school),
+               data = age_alldata_del,
+               na.action = na.omit,
+               REML = TRUE)
+
+result4 <- extract_fixed2(model4, "Model 4")
+
+## merge
+age_results <- bind_rows(result1, result2, result3, result4)
+
+##5 GLMM:Sensitivity Analysis-parent####
+p_data_del <- subset(p_data, !(appoint_m0 == 1))
+
+set.seed(2026)
+##vaccine uptake
+model1 <- glmer(dose_m6 ~ group + economic + p_education_cat + (1 | school),
+                data = p_data,
+                family = binomial(link = "log"),
+                control = glmerControl(optimizer = "bobyqa", 
+                                       optCtrl = list(maxfun = 2e5),
+                                       check.conv.grad = .makeCC("warning", tol = 1e-3, relTol = NULL)),
+                na.action = na.omit)
+
+result1 <- extract_fixed1(model1, "Model 1")
+
+##appointment
+model2 <- glmer(appoint_m6 ~ group + economic + p_education_cat + (1 | school),
+                data = p_data_del,
+                family = binomial(link = "log"),
+                control = glmerControl(optimizer = "bobyqa", 
+                                       optCtrl = list(maxfun = 2e5),
+                                       check.conv.grad = .makeCC("warning", tol = 1e-3, relTol = NULL)),
+                na.action = na.omit)
+
+result2 <- extract_fixed1(model2, "Model 2")
+
+##intention
+model3 <- glmer(will_m6 ~ group + economic + p_education_cat + will_m0 + (1 | school),
+                data = p_data_del,
+                family = binomial(link = "logit"),
+                control = glmerControl(optimizer = "bobyqa", 
+                                       optCtrl = list(maxfun = 2e5),
+                                       check.conv.grad = .makeCC("warning", tol = 1e-3, relTol = NULL)),
+                na.action = na.omit)
+
+result3 <- extract_fixed1(model3, "Model 3")
+
+#knowledge score
+model4 <- lmer(score_m6 ~ group + economic + p_education_cat + score_m0 + (1 | school),
+               data = p_data_del,
+               na.action = na.omit,
+               REML = TRUE)
+
+result4 <- extract_fixed2(model4, "Model 4")
+
+## merge
+parental_results <- bind_rows(result1, result2, result3, result4)
+
+##5 GEE:Sensitivity Analysis####
+##Effect size output
+extract_fixed3 <- function(model, model_name) {
+  s <- summary(model)
+  coefs <- s$coefficients
+  OR <- exp(coefs[, 1])
+  lwr <- exp(coefs[, 1] - 1.96 * coefs[, 2])
+  upr <- exp(coefs[, 1] + 1.96 * coefs[, 2])
+  or_ci <- sprintf("%.2f (%.2f, %.2f)", OR, lwr, upr)
+  p_val <- coefs[, 4]
+  p_formatted <- ifelse(p_val < 0.001, "<0.001", sprintf("%.3f", p_val))
+  
+  result <- data.frame(
+    Model = model_name,
+    Term = rownames(coefs),
+    `OR (95% CI)` = or_ci,
+    p.value = p_formatted,
+    check.names = FALSE, 
+    stringsAsFactors = FALSE
+  )
+  return(result)
+}
+
+# vaccine uptake
+sub_alldata$dose_m6 <- as.numeric(as.character(sub_alldata$dose_m6))
+sub_alldata$group <- relevel(factor(sub_alldata$group), ref = "control")
+model1_gee <- geeglm(dose_m6 ~ group + economic, 
+                     family = binomial(link = "log"),
+                     id = school, corstr = "exchangeable",
+                     data = sub_alldata, na.action = na.omit)
+
+# results
+result1 <- extract_fixed3(model1_gee, "Model 1")
+
+# appointment
+sub_alldata_del$appoint_m6 <- as.numeric(as.character(sub_alldata_del$appoint_m6))
+model2_gee <- geeglm(appoint_m6 ~ group + economic, 
+                     family = binomial(link = "log"),
+                     id = school, corstr = "exchangeable",
+                     data = sub_alldata_del, na.action = na.omit)
+result2 <- extract_fixed3(model2_gee, "Model 2")
+
+# intention
+sub_alldata_del$will_m6 <- as.numeric(as.character(sub_alldata_del$will_m6))
+sub_alldata_del$will_m0 <- as.numeric(as.character(sub_alldata_del$will_m0))
+
+model3_gee <- geeglm(will_m6 ~ group + economic + will_m0, 
+                     family = binomial(link = "logit"),
+                     id = school, corstr = "exchangeable",
+                     data = sub_alldata_del, na.action = na.omit)
+
+result3 <- extract_fixed3(model3_gee, "Model 3")
+
+# knowledge score
+# Effect size output
+extract_fixed4 <- function(model, model_name) {
+  s <- summary(model)
+  coefs <- s$coefficients 
+  beta <- coefs[, 1]                
+  se   <- coefs[, 2]                
+  lwr  <- beta - 1.96 * se         
+  upr  <- beta + 1.96 * se          
+  beta_ci <- sprintf("%.2f (%.2f, %.2f)", beta, lwr, upr)
+  p_val <- coefs[, 4]
+  p_formatted <- ifelse(p_val < 0.001, "<0.001", sprintf("%.3f", p_val))
+  
+  result <- data.frame(
+    Model = model_name,
+    Term = rownames(coefs),
+    `β (95% CI)` = beta_ci,
+    p.value = p_formatted,
+    check.names = FALSE,
+    stringsAsFactors = FALSE
+  )
+  return(result)
+}
+
+# GEE model
+model4_gee <- geeglm(score_m6 ~ group + economic + score_m0,
+                     family = gaussian,
+                     id = school, corstr = "exchangeable",
+                     data = sub_alldata_del, na.action = na.omit)
+
+result4 <- extract_fixed4(model4_gee, "Model 4")
+
+# merge results
+GEE_results <- bind_rows(result1, result2, result3, result4)
+
+
+## 6 Subgroup analysis-vaccine uptake####
+## 6.1 Stratification variable：age ####
+sub_alldata <- sub_alldata %>%
+  mutate(age_group = case_when(age == 11 | age == 13 | age == 14 ~ 1,
+                               age == 15 | age == 16 ~ 2))
+sub_alldata$age_group <- as.factor(sub_alldata$age_group)
+
+sub_alldata$dose_m6 <- as.numeric(as.character(sub_alldata$dose_m6))
+result1 <- sub_alldata %>%
+  group_by(group, age_group) %>%
+  summarise(
+    total = n(),
+    dose_m6_count = sum(dose_m6, na.rm = TRUE),  
+    dose_m6_rate = mean(dose_m6, na.rm = TRUE) * 100
+  ) %>%
+  ungroup()
+print(result1)
+
+sub_alldata$dose_m6 <- as.factor(as.character(sub_alldata$dose_m6))
+
+# Add interactive element age_group
+model_age_int <- glmer(dose_m6 ~ group * age_group + economic + (1 | school),
+                       data = sub_alldata,
+                       family = binomial(link = "log"),
+                       control = glmerControl(optimizer = "bobyqa", 
+                                              optCtrl = list(maxfun = 2e5),
+                                              check.conv.grad = .makeCC("warning", tol = 1e-3, relTol = NULL)),
+                       na.action = na.omit)
+
+summary(model_age_int)
+
+# Likelihood ratio test
+model_no_int <- update(model_age_int, . ~ . - group:age_group)
+lrt_result <- anova(model_no_int, model_age_int, test = "LRT")
+cat("Interaction p-value (LRT):", lrt_result$`Pr(>Chisq)`[2], "\n")
+
+# Stratified analysis (by age)
+data_age <- split(sub_alldata, sub_alldata$age_group)
+model_age <- lapply(data_age, function(data_age) {
+  glmer(dose_m6 ~ group + economic + (1 | school),
+        data = data_age,
+        family = binomial(link = "log"),
+        control = glmerControl(optimizer = "bobyqa", 
+                               optCtrl = list(maxfun = 2e5),
+                               check.conv.grad = .makeCC("warning", tol = 1e-3, relTol = NULL)),
+        na.action = na.omit)
+})
+
+age_results <- bind_rows(
+  lapply(names(model_age), function(age_group) {
+    tidy(model_age[[age_group]], conf.int = TRUE, exponentiate = TRUE) %>%
+      filter(grepl("^group", term)) %>%
+      mutate(Age = age_group) %>%
+      select(Age, term, estimate, conf.low, conf.high, p.value)
+  }),
+  .id = "model"
+)
+
+print(age_results)
+
+##6.2 Stratification variable：total awareness score ####
+sub_alldata <- sub_alldata %>% mutate(p2_1 = case_when(p2_1 == 1 ~ 1,
+                                                       p2_1 == 2 ~ 0),
+                                      p2_5 = case_when(p2_5 == 1 ~ 1,
+                                                       p2_5 == 2 ~ 0),
+                                      p2_7 = case_when(p2_7 == 1 ~ 1,
+                                                       p2_7 == 2 ~ 0))
+
+sub_alldata$aware_score <- sub_alldata$p2_1 + sub_alldata$p2_5 + sub_alldata$p2_7
+table(sub_alldata$aware_score)
+sub_alldata[which(sub_alldata$aware_score == 0), 'aware_score'] <- 1
+sub_alldata[which(sub_alldata$aware_score == 3), 'aware_score'] <- 2
+sub_alldata$dose_m6 <- as.numeric(as.character(sub_alldata$dose_m6))
+result2 <- sub_alldata %>%
+  group_by(group, aware_score) %>%
+  summarise(
+    total = n(),
+    dose_m6_count = sum(dose_m6, na.rm = TRUE),  
+    dose_m6_rate = mean(dose_m6, na.rm = TRUE) * 100
+  ) %>%
+  ungroup()
+print(result2)
+
+sub_alldata$dose_m6 <- as.factor(as.character(sub_alldata$dose_m6))
+
+
+# Add interactive element: aware_score
+model_aware_int <- glmer(dose_m6 ~ group * aware_score + economic + (1 | school),
+                         data = sub_alldata,
+                         family = binomial(link = "log"),
+                         control = glmerControl(optimizer = "bobyqa", 
+                                                optCtrl = list(maxfun = 2e5),
+                                                check.conv.grad = .makeCC("warning", tol = 1e-3, relTol = NULL)),
+                         na.action = na.omit)
+
+summary(model_aware_int)
+
+# 似然比检验
+model_awareness_int <- update(model_aware_int, . ~ . - group:aware_score)
+lrt_result <- anova(model_awareness_int, model_aware_int, test = "LRT")
+cat("Interaction p-value (LRT):", lrt_result$`Pr(>Chisq)`[2], "\n")
+
+# 分层分析（按aware_score）
+data_aware <- split(sub_alldata, sub_alldata$aware_score)
+model_aware <- lapply(data_aware, function(data_aware) {
+  glmer(dose_m6 ~ group + economic + (1 | school),
+        data = data_aware,
+        family = binomial(link = "log"),
+        control = glmerControl(optimizer = "bobyqa", 
+                               optCtrl = list(maxfun = 2e5),
+                               check.conv.grad = .makeCC("warning", tol = 1e-3, relTol = NULL)),
+        na.action = na.omit)
+})
+
+aware_results <- bind_rows(
+  lapply(names(model_aware), function(aware_score) {
+    tidy(model_aware[[aware_score]], conf.int = TRUE, exponentiate = TRUE) %>%
+      filter(grepl("^group", term)) %>%
+      mutate(Aware = aware_score) %>%
+      select(Aware, term, estimate, conf.low, conf.high, p.value)
+  }),
+  .id = "model"
+)
+
+print(aware_results)
+
+
+##6.3 Stratification variable: economic ####
+# Merge low and medium
+sub_alldata <- sub_alldata %>%
+  mutate(sub_eco = case_when(economic == 1 | economic == 2 ~ 1,
+                             economic == 3 ~ 2))
+sub_alldata$sub_eco <- as.factor(sub_alldata$sub_eco)
+
+sub_alldata$dose_m6 <- as.numeric(as.character(sub_alldata$dose_m6))
+result3 <- sub_alldata %>%
+  group_by(group, sub_eco) %>%
+  summarise(
+    total = n(), 
+    dose_m6_count = sum(dose_m6, na.rm = TRUE),
+    dose_m6_rate = mean(dose_m6, na.rm = TRUE) * 100
+  ) %>%
+  ungroup()
+print(result3)
+sub_alldata$dose_m6 <- as.factor(as.character(sub_alldata$dose_m6))
+
+# Add interactive element sub_eco
+model_economic_int <- glmer(dose_m6 ~ group * sub_eco + (1 | school),
+                            data = sub_alldata,
+                            family = binomial(link = "log"),
+                            control = glmerControl(optimizer = "bobyqa", 
+                                                   optCtrl = list(maxfun = 2e5),
+                                                   check.conv.grad = .makeCC("warning", tol = 1e-3, relTol = NULL)),
+                            na.action = na.omit)
+
+summary(model_economic_int)
+
+# Likelihood ratio test
+model_eco_int <- update(model_economic_int, . ~ . - group:sub_eco)
+lrt_result <- anova(model_eco_int, model_economic_int, test = "LRT")
+cat("Interaction p-value (LRT):", lrt_result$`Pr(>Chisq)`[2], "\n")
+
+# Stratified analysis (by economic)
+data_economic <- split(sub_alldata, sub_alldata$sub_eco)
+model_economic <- lapply(data_economic, function(data_economic) {
+  glmer(dose_m6 ~ group + (1 | school),
+        data = data_economic,
+        family = binomial(link = "log"),
+        control = glmerControl(optimizer = "bobyqa", 
+                               optCtrl = list(maxfun = 2e5),
+                               check.conv.grad = .makeCC("warning", tol = 1e-3, relTol = NULL)),
+        na.action = na.omit)
+})
+
+economic_results <- bind_rows(
+  lapply(names(model_economic), function(sub_eco) {
+    tidy(model_economic[[sub_eco]], conf.int = TRUE, exponentiate = TRUE) %>%
+      filter(grepl("^group", term)) %>%
+      mutate(Economic = sub_eco) %>%
+      select(Economic, term, estimate, conf.low, conf.high, p.value)
+  }),
+  .id = "model"
+)
+
+print(economic_results)
+
+##6.4 Stratification variable:p_education####
+# n/N (%)
+sub_alldata <- sub_alldata %>%
+  mutate(p_education_cat = ifelse(is.na(p_education_cat), '3', p_education_cat))
+# 3==missing
+table(sub_alldata$p_education_cat)
+sub_alldata$p_education_cat <- as.factor(as.character(sub_alldata$p_education_cat))
+
+sub_alldata$dose_m6 <- as.numeric(as.character(sub_alldata$dose_m6))
+
+result4 <- sub_alldata %>%
+  group_by(group, p_education_cat) %>%
+  summarise(
+    total = n(), 
+    dose_m6_count = sum(dose_m6, na.rm = TRUE),
+    dose_m6_rate = mean(dose_m6, na.rm = TRUE) * 100
+  ) %>%
+  ungroup()
+print(result4)
+
+sub_alldata$dose_m6 <- as.factor(as.character(sub_alldata$dose_m6))
+
+# Add nteractive element: p_education
+model_edu_int <- glmer(dose_m6 ~ group * p_education_cat + economic + (1 | school),
+                       data = sub_alldata,
+                       family = binomial(link = "log"),
+                       control = glmerControl(optimizer = "bobyqa", 
+                                              optCtrl = list(maxfun = 2e5),
+                                              check.conv.grad = .makeCC("warning", tol = 1e-3, relTol = NULL)),
+                       na.action = na.omit)
+
+summary(model_edu_int)
+
+# Likelihood ratio test
+model_education_int <- update(model_edu_int, . ~ . - group:p_education_cat)
+lrt_result <- anova(model_education_int, model_edu_int, test = "LRT")
+cat("Interaction p-value (LRT):", lrt_result$`Pr(>Chisq)`[2], "\n")
+
+# Stratified analysis (by p_education)
+data_edu <- split(sub_alldata, sub_alldata$p_education_cat)
+model_edu <- lapply(data_edu, function(data_edu) {
+  glmer(dose_m6 ~ group + economic + (1 | school),
+        data = data_edu,
+        family = binomial(link = "log"),
+        control = glmerControl(optimizer = "bobyqa", 
+                               optCtrl = list(maxfun = 2e5),
+                               check.conv.grad = .makeCC("warning", tol = 1e-3, relTol = NULL)),
+        na.action = na.omit)
+})
+
+edu_results <- bind_rows(
+  lapply(names(model_edu), function(education) {
+    tidy(model_edu[[education]], conf.int = TRUE, exponentiate = TRUE) %>%
+      filter(grepl("^group", term)) %>%
+      mutate(Education = education) %>%
+      select(Education, term, estimate, conf.low, conf.high, p.value)
+  }),
+  .id = "model"
+)
+
+print(edu_results)
+
+##6.5 Stratification variable: p_income####
+sub_alldata <- sub_alldata %>%
+  mutate(p_income_cat = ifelse(is.na(p_income_cat), '3', p_income_cat))
+table(sub_alldata$p_income_cat)
+
+sub_alldata$dose_m6 <- as.numeric(as.character(sub_alldata$dose_m6))
+result5 <- sub_alldata %>%
+  group_by(group, p_income_cat) %>%
+  summarise(
+    total = n(),
+    dose_m6_count = sum(dose_m6, na.rm = TRUE),
+    dose_m6_rate = mean(dose_m6, na.rm = TRUE) * 100
+  ) %>%
+  ungroup()
+print(result5)
+
+sub_alldata$dose_m6 <- as.factor(as.character(sub_alldata$dose_m6))
+
+# Add interactive element p_income_cat
+model_income_int <- glmer(dose_m6 ~ group * p_income_cat + economic + (1 | school),
+                          data = sub_alldata,
+                          family = binomial(link = "log"),
+                          control = glmerControl(optimizer = "bobyqa", 
+                                                 optCtrl = list(maxfun = 2e5),
+                                                 check.conv.grad = .makeCC("warning", tol = 1e-3, relTol = NULL)),
+                          na.action = na.omit)
+
+summary(model_income_int)
+
+# Likelihood ratio test
+model_in_int <- update(model_income_int, . ~ . - group:p_income_cat)
+lrt_result <- anova(model_in_int, model_income_int, test = "LRT")
+cat("Interaction p-value (LRT):", lrt_result$`Pr(>Chisq)`[2], "\n")
+
+# Stratified analysis（by income）
+data_income <- split(sub_alldata, sub_alldata$p_income_cat)
+model_income <- lapply(data_income, function(data_income) {
+  glmer(dose_m6 ~ group + economic + (1 | school),
+        data = data_income,
+        family = binomial(link = "log"),
+        control = glmerControl(optimizer = "bobyqa", 
+                               optCtrl = list(maxfun = 2e5),
+                               check.conv.grad = .makeCC("warning", tol = 1e-3, relTol = NULL)),
+        na.action = na.omit)
+})
+
+income_results <- bind_rows(
+  lapply(names(model_income), function(income) {
+    tidy(model_income[[income]], conf.int = TRUE, exponentiate = TRUE) %>%
+      filter(grepl("^group", term)) %>%
+      mutate(Income = income) %>%
+      select(Income, term, estimate, conf.low, conf.high, p.value)
+  }),
+  .id = "model"
+)
+
+print(income_results)
+
+
+##6.6 Forest map for HPV uptake####
+# Data frame
+data1 <- data.frame(
+  Subgroup = c(
+    "Age", "  ≤ 14 years", "  > 14 years",
+    "Baseline awareness score", "  0–1", "  2–3",
+    "Regional economic level", "  Low or medium", "  High",
+    "Parental education", "  Junior high school or below", "  Above junior high school", "  Unknown",
+    "Annual household income", "  ≤ 100,000 CNY", "  > 100,000 CNY", "  Unknown"
+  ),
+  Control = c(
+    NA, "15/431 (3.5)", "16/112 (14.3)",
+    NA, "12/329 (3.7)", "19/214 (8.9)",
+    NA, "16/302 (5.3)", "15/241 (6.2)",
+    NA, "21/343 (6.1)", "9/107 (8.4)", "1/93 (1.1)",
+    NA, "11/189 (5.8)", "12/155 (7.7)", "8/199 (4.0)"
+  ),
+  Intervention = c(
+    NA, "30/491 (6.1)", "26/128 (20.3)",
+    NA, "32/395 (8.1)", "24/224 (10.7)",
+    NA, "26/413 (6.3)", "30/206 (14.6)",
+    NA, "34/255 (13.3)", "9/129 (7.0)", "13/235 (5.5)",
+    NA, "20/160 (12.5)", "16/137 (11.7)", "20/322 (6.2)"
+  ),
+  OR = c(
+    NA, "1.71 (0.80 to 3.65)", "1.48 (0.69 to 3.20)",
+    NA, "2.31 (1.20 to 4.45)", "1.23 (0.70 to 2.19)",
+    NA, "2.27 (0.30 to 17.4)", "2.34 (1.30 to 4.23)",
+    NA, "2.41 (1.44 to 4.04)", "0.56 (0.23 to 1.33)", "5.20 (0.65 to 41.50)",
+    NA, "2.36 (1.11 to 4.58)", "1.30 (0.64 to 2.64)", "1.72 (0.76 to 3.90)"
+  ),
+  P_interaction = c(
+    "0.505", "", "",
+    "0.217", "", "",
+    "0.603", "", "",
+    "0.031", "", "", "",
+    "0.628", "", "", ""
+  ),
+  mean = c(NA, 1.71, 1.48, NA, 2.31, 1.23, NA, 2.27, 2.34, 
+           NA, 2.41, 0.56, 5.20, NA, 2.36, 1.30, 1.72),
+  lower = c(NA, 0.80, 0.69, NA, 1.20, 0.70, NA, 0.30, 1.30, 
+            NA, 1.44, 0.23, 0.65, NA, 1.11, 0.64, 0.76),
+  upper = c(NA, 3.65, 3.20, NA, 4.45, 2.19, NA, 17.4, 4.23, 
+            NA, 4.04, 1.33, 41.50, NA, 4.58, 2.64, 3.90)
+)
+
+# Text table
+tabletext <- cbind(
+  c("Subgroup", data1$Subgroup),
+  c("Control n/N (%)", data1$Control),
+  c("Intervention n/N (%)", data1$Intervention),
+  c("Adjusted OR (95% CI)", data1$OR),
+  c("P-interaction", data1$P_interaction)
+)
+
+n_rows <- nrow(tabletext)
+line_heights <- unit(c(12, rep(6, n_rows - 1)), "mm")
+
+# Forest map
+forest_dose <- forestplot(
+  labeltext = tabletext,
+  graph.pos = 4,
+  mean = c(NA, data1$mean),
+  lower = c(NA, data1$lower),
+  upper = c(NA, data1$upper),
+  is.summary = c(TRUE, rep(FALSE, nrow(data1))),
+  xlog = FALSE,
+  col = fpColors(
+    box = "black", 
+    line = "black", 
+    summary = "black",
+    hrz_lines = "black"
+  ),
+  txt_gp = fpTxtGp(
+    label = gpar(fontfamily = "serif", cex = 0.9, fontface = "plain"),
+    ticks = gpar(fontfamily = "serif", cex = 0.8),
+    xlab = gpar(fontfamily = "serif", cex = 1),
+  ),
+  boxsize = 0.2,
+  lineheight = unit(0.6, "cm"),
+  line.margin = unit(0.5, "cm"),
+  graphwidth = unit(8, "cm"),
+  colgap = unit(6, "mm"),
+  lwd.ci = 1.5,
+  lwd.xaxis = 1.2,
+  lwd.zero = 1.2,
+  clip = c(0,10),
+  xticks = c(0,1,5,10),
+  grid.gp = gpar(lty = 2, col = "gray60"),
+  hrzl_lines = list(
+    "1" = gpar(lwd = 1.5, col = "black"),
+    "2" = gpar(lwd = 0.8, col = "gray50")
+  ),
+  ci.vertices = TRUE,
+  ci.vertices.height = 0.15,
+  zero = 1
+)
+
+print(forest_dose)
+
+##7 Subgroup analysis-appointment scheduling####
+##7.1 Stratification variable：age ####
+sub_alldata_del <- sub_alldata %>% filter(appoint_m0 != 1)
+
+sub_alldata_del <- sub_alldata_del %>%
+  mutate(age_group = case_when(age == 11 | age == 13 | age == 14 ~ 1,
+                               age == 15 | age == 16 ~ 2))
+table(sub_alldata_del$age_group)
+sub_alldata_del$age_group <- as.factor(sub_alldata_del$age_group)
+
+sub_alldata_del$appoint_m6 <- as.numeric(as.character(sub_alldata_del$appoint_m6))
+result3 <- sub_alldata_del %>%
+  group_by(group, age_group) %>%
+  summarise(
+    total = n(),
+    appoint_m6_count = sum(appoint_m6, na.rm = TRUE),  
+    appoint_m6_rate = mean(appoint_m6, na.rm = TRUE) * 100
+  ) %>%
+  ungroup()
+print(result3)
+
+sub_alldata_del$appoint_m6 <- as.factor(as.character(sub_alldata_del$appoint_m6))
+
+# Add an interactive element
+model_age_int <- glmer(appoint_m6 ~ group * age_group + economic + (1 | school),
+                       data = sub_alldata_del,
+                       family = binomial(link = "log"),
+                       control = glmerControl(optimizer = "bobyqa", 
+                                              optCtrl = list(maxfun = 2e5),
+                                              check.conv.grad = .makeCC("warning", tol = 1e-3, relTol = NULL)),
+                       na.action = na.omit)
+
+summary(model_age_int)
+
+# Likelihood ratio test
+model_no_int <- update(model_age_int, . ~ . - group:age_group)
+lrt_result <- anova(model_no_int, model_age_int, test = "LRT")
+cat("Interaction p-value (LRT):", lrt_result$`Pr(>Chisq)`[2], "\n")
+
+# Stratified analysis (by age)）
+data_age <- split(sub_alldata_del, sub_alldata_del$age_group)
+model_age <- lapply(data_age, function(data_age) {
+  glmer(appoint_m6 ~ group + economic + (1 | school),
+        data = data_age,
+        family = binomial(link = "log"),
+        control = glmerControl(optimizer = "bobyqa", 
+                               optCtrl = list(maxfun = 2e5),
+                               check.conv.grad = .makeCC("warning", tol = 1e-3, relTol = NULL)),
+        na.action = na.omit)
+})
+
+age_results <- bind_rows(
+  lapply(names(model_age), function(age_group) {
+    tidy(model_age[[age_group]], conf.int = TRUE, exponentiate = TRUE) %>%
+      filter(grepl("^group", term)) %>%
+      mutate(Age = age_group) %>%
+      select(Age, term, estimate, conf.low, conf.high, p.value)
+  }),
+  .id = "model"
+)
+
+print(age_results)
+
+##7.2 Stratification variables：total awareness score ####
+sub_alldata_del$aware_score <- sub_alldata_del$p2_1 + sub_alldata_del$p2_5 + sub_alldata_del$p2_7
+sub_alldata_del[which(sub_alldata_del$aware_score == 0), 'aware_score'] <- 1
+sub_alldata_del[which(sub_alldata_del$aware_score == 3), 'aware_score'] <- 2
+table(sub_alldata_del$aware_score)
+
+sub_alldata_del$appoint_m6 <- as.numeric(as.character(sub_alldata_del$appoint_m6))
+result4 <- sub_alldata_del %>%
+  group_by(group, aware_score) %>%
+  summarise(
+    total = n(),
+    appoint_m6_count = sum(appoint_m6, na.rm = TRUE),  
+    appoint_m6_rate = mean(appoint_m6, na.rm = TRUE) * 100
+  ) %>%
+  ungroup()
+print(result4)
+
+sub_alldata_del$appoint_m6 <- as.factor(as.character(sub_alldata_del$appoint_m6))
+
+# Add an interactive element
+model_aware_int <- glmer(appoint_m6 ~ group * aware_score + economic + (1 | school),
+                         data = sub_alldata_del,
+                         family = binomial(link = "log"),
+                         control = glmerControl(optimizer = "bobyqa", 
+                                                optCtrl = list(maxfun = 2e5),
+                                                check.conv.grad = .makeCC("warning", tol = 1e-3, relTol = NULL)),
+                         na.action = na.omit)
+
+summary(model_aware_int)
+
+model_awareness_int <- update(model_aware_int, . ~ . - group:aware_score)
+lrt_result <- anova(model_awareness_int, model_aware_int, test = "LRT")
+cat("Interaction p-value (LRT):", lrt_result$`Pr(>Chisq)`[2], "\n")
+
+# Stratified analysis (by aware_score)
+data_aware <- split(sub_alldata_del, sub_alldata_del$aware_score)
+model_aware <- lapply(data_aware, function(data_aware) {
+  glmer(appoint_m6 ~ group + economic + (1 | school),
+        data = data_aware,
+        family = binomial(link = "log"),
+        control = glmerControl(optimizer = "bobyqa", 
+                               optCtrl = list(maxfun = 2e5),
+                               check.conv.grad = .makeCC("warning", tol = 1e-3, relTol = NULL)),
+        na.action = na.omit)
+})
+
+aware_results <- bind_rows(
+  lapply(names(model_aware), function(aware_score) {
+    tidy(model_aware[[aware_score]], conf.int = TRUE, exponentiate = TRUE) %>%
+      filter(grepl("^group", term)) %>%
+      mutate(Aware = aware_score) %>%
+      select(Aware, term, estimate, conf.low, conf.high, p.value)
+  }),
+  .id = "model"
+)
+
+print(aware_results)
+
+##7.3 Stratification variables: economic ####
+sub_alldata_del <- sub_alldata_del %>%
+  mutate(sub_eco = case_when(economic == 1 | economic == 2 ~ 1,
+                             economic == 3 ~ 2))
+sub_alldata_del$sub_eco <- as.factor(sub_alldata_del$sub_eco)
+table(sub_alldata_del$sub_eco)
+
+sub_alldata_del$appoint_m6 <- as.numeric(as.character(sub_alldata_del$appoint_m6))
+result2 <- sub_alldata_del %>%
+  group_by(group, sub_eco) %>%
+  summarise(
+    total = n(), 
+    appoint_m6_count = sum(appoint_m6, na.rm = TRUE),
+    appoint_m6_rate = mean(appoint_m6, na.rm = TRUE) * 100
+  ) %>%
+  ungroup()
+print(result2)
+
+sub_alldata_del$appoint_m6 <- as.factor(as.character(sub_alldata_del$appoint_m6))
+
+
+# Add an interactive element
+model_economic_int <- glmer(appoint_m6 ~ group * sub_eco + (1 | school),
+                            data = sub_alldata_del,
+                            family = binomial(link = "log"),
+                            control = glmerControl(optimizer = "bobyqa", 
+                                                   optCtrl = list(maxfun = 2e5),
+                                                   check.conv.grad = .makeCC("warning", tol = 1e-3, relTol = NULL)),
+                            na.action = na.omit)
+
+summary(model_economic_int)
+
+model_eco_int <- update(model_economic_int, . ~ . - group:sub_eco)
+lrt_result <- anova(model_eco_int, model_economic_int, test = "LRT")
+cat("Interaction p-value (LRT):", lrt_result$`Pr(>Chisq)`[2], "\n")
+
+# Stratified analysis (by economic criteria)
+data_economic <- split(sub_alldata_del, sub_alldata_del$sub_eco)
+model_economic <- lapply(data_economic, function(data_economic) {
+  glmer(appoint_m6 ~ group + (1 | school),
+        data = data_economic,
+        family = binomial(link = "log"),
+        control = glmerControl(optimizer = "bobyqa", 
+                               optCtrl = list(maxfun = 2e5),
+                               check.conv.grad = .makeCC("warning", tol = 1e-3, relTol = NULL)),
+        na.action = na.omit)
+})
+
+economic_results <- bind_rows(
+  lapply(names(model_economic), function(sub_eco) {
+    tidy(model_economic[[sub_eco]], conf.int = TRUE, exponentiate = TRUE) %>%
+      filter(grepl("^group", term)) %>%
+      mutate(Economic = sub_eco) %>%
+      select(Economic, term, estimate, conf.low, conf.high, p.value)
+  }),
+  .id = "model"
+)
+
+print(economic_results)
+
+##7.4 Stratification variables: p_education####
+sub_alldata_del <- sub_alldata_del %>%
+  mutate(p_education_cat = ifelse(is.na(p_education_cat), '3', p_education_cat))
+# 3==missing
+table(sub_alldata_del$p_education_cat)
+
+sub_alldata_del$appoint_m6 <- as.numeric(as.character(sub_alldata_del$appoint_m6))
+result1 <- sub_alldata_del %>%
+  group_by(group, p_education_cat) %>%
+  summarise(
+    total = n(),
+    appoint_m6_count = sum(appoint_m6, na.rm = TRUE),
+    appoint_m6_rate = mean(appoint_m6, na.rm = TRUE) * 100
+  ) %>%
+  ungroup()
+print(result1)
+
+# Add an interactive element
+model_edu_int <- glmer(appoint_m6 ~ group * p_education_cat + economic + (1 | school),
+                       data = sub_alldata_del,
+                       family = binomial(link = "log"),
+                       control = glmerControl(optimizer = "bobyqa", 
+                                              optCtrl = list(maxfun = 2e5),
+                                              check.conv.grad = .makeCC("warning", tol = 1e-3, relTol = NULL)),
+                       na.action = na.omit)
+
+summary(model_edu_int)
+
+model_education_int <- update(model_edu_int, . ~ . - group:p_education_cat)
+lrt_result <- anova(model_education_int, model_edu_int, test = "LRT")
+cat("Interaction p-value (LRT):", lrt_result$`Pr(>Chisq)`[2], "\n")
+
+# Stratified analysis (by p_education_cat)
+data_edu <- split(sub_alldata_del, sub_alldata_del$p_education_cat)
+model_edu <- lapply(data_edu, function(data_edu) {
+  glmer(appoint_m6 ~ group + economic + (1 | school),
+        data = data_edu,
+        family = binomial(link = "log"),
+        control = glmerControl(optimizer = "bobyqa", 
+                               optCtrl = list(maxfun = 2e5),
+                               check.conv.grad = .makeCC("warning", tol = 1e-3, relTol = NULL)),
+        na.action = na.omit)
+})
+
+edu_results <- bind_rows(
+  lapply(names(model_edu), function(education) {
+    tidy(model_edu[[education]], conf.int = TRUE, exponentiate = TRUE) %>%
+      filter(grepl("^group", term)) %>%
+      mutate(Education = education) %>%
+      select(Education, term, estimate, conf.low, conf.high, p.value)
+  }),
+  .id = "model"
+)
+
+print(edu_results)
+
+##7.5 Stratification variables: p_income####
+sub_alldata_del <- sub_alldata_del %>%
+  mutate(p_income_cat = ifelse(is.na(p_income_cat), '3', p_income_cat))
+table(sub_alldata_del$p_income_cat)
+
+sub_alldata_del$appoint_m6 <- as.numeric(as.character(sub_alldata_del$appoint_m6))
+result2 <- sub_alldata_del %>%
+  group_by(group, p_income_cat) %>%
+  summarise(
+    total = n(),
+    appoint_m6_count = sum(appoint_m6, na.rm = TRUE),
+    appoint_m6_rate = mean(appoint_m6, na.rm = TRUE) * 100
+  ) %>%
+  ungroup()
+print(result2)
+sub_alldata_del$appoint_m6 <- as.factor(as.character(sub_alldata_del$appoint_m6))
+
+# Add an interactive element
+model_income_int <- glmer(appoint_m6 ~ group * p_income_cat + economic + (1 | school),
+                          data = sub_alldata_del,
+                          family = binomial(link = "log"),
+                          control = glmerControl(optimizer = "bobyqa", 
+                                                 optCtrl = list(maxfun = 2e5),
+                                                 check.conv.grad = .makeCC("warning", tol = 1e-3, relTol = NULL)),
+                          na.action = na.omit)
+
+summary(model_income_int)
+
+model_in_int <- update(model_income_int, . ~ . - group:p_income_cat)
+lrt_result <- anova(model_in_int, model_income_int, test = "LRT")
+cat("Interaction p-value (LRT):", lrt_result$`Pr(>Chisq)`[2], "\n")
+
+# Stratified analysis (by p_income)
+data_income <- split(sub_alldata_del, sub_alldata_del$p_income_cat)
+model_income <- lapply(data_income, function(data_income) {
+  glmer(appoint_m6 ~ group + economic + (1 | school),
+        data = data_income,
+        family = binomial(link = "log"),
+        control = glmerControl(optimizer = "bobyqa", 
+                               optCtrl = list(maxfun = 2e5),
+                               check.conv.grad = .makeCC("warning", tol = 1e-3, relTol = NULL)),
+        na.action = na.omit)
+})
+
+income_results <- bind_rows(
+  lapply(names(model_income), function(income) {
+    tidy(model_income[[income]], conf.int = TRUE, exponentiate = TRUE) %>%
+      filter(grepl("^group", term)) %>%
+      mutate(Income = income) %>%
+      select(Income, term, estimate, conf.low, conf.high, p.value)
+  }),
+  .id = "model"
+)
+
+print(income_results)
+
+##7.6 Forest map for appointment scheduling ####
+# Data frame
+data2 <- data.frame(
+  Subgroup = c(
+    "Age", "  ≤14 years", "  >14 years",
+    "Baseline awareness score", "  0–1", "  2–3",
+    "Regional economic level", "  Low or medium", "  High",
+    "Parental education", "  Junior high school or below", "  Above junior high school", "  Unknown",
+    "Annual household income", "  ≤100,000 CNY", "  >100,000 CNY", "  Unknown"
+  ),
+  Control = c(
+    NA, "17/406 (4.2)", "9/108 (8.3)",
+    NA, "17/314 (5.4)", "9/200 (4.5)",
+    NA, "13/294 (4.4)", "13/220 (5.9)",
+    NA, "19/322 (5.9)", "2/105 (1.9)", "5/87 (5.8)",
+    NA, "8/176 (4.6)", "11/147 (7.5)", "7/191 (3.7)"
+  ),
+  Intervention = c(
+    NA, "49/479 (10.2)", "14/127 (11.0)",
+    NA, "30/388 (7.7)", "33/218 (15.1)",
+    NA, "38/404 (9.4)", "25/202 (12.4)",
+    NA, "24/249 (9.6)", "11/127 (8.7)", "28/230 (12.2)",
+    NA, "14/159 (8.8)", "12/134 (9.0)", "37/313 (11.8)"
+  ),
+  OR = c(
+    NA, "2.37 (1.38, 4.08)", "1.49 (0.67, 3.35)",
+    NA, "1.31 (0.72, 2.39)", "3.44 (1.69, 6.99)",
+    NA, "2.42 (0.92, 6.38)", "2.09 (1.10, 3.98)",
+    NA, "1.60 (0.89, 2.88)", "3.72 (0.80, 17.2)", "1.97 (0.74, 5.22)",
+    NA, "1.72 (0.74, 4.03)", "1.01 (0.46, 2.20)", "3.42 (1.54, 7.61)"
+  ),
+  P_interaction = c(
+    "0.230", "", "",
+    "0.053", "", "",
+    "0.973", "", "",
+    "0.298", "", "", "",
+    "0.146", "", "", ""
+  ),
+  mean = c(NA, 2.37, 1.49, NA, 1.31, 3.44, NA, 2.42, 2.09, 
+           NA, 1.60, 3.72, 1.97, NA, 1.72, 1.01, 3.42),
+  lower = c(NA, 1.38, 0.67, NA, 0.72, 1.69, NA, 0.92, 1.10, 
+            NA, 0.89, 0.80, 0.74, NA, 0.74, 0.46, 1.54),
+  upper = c(NA, 4.08, 3.35, NA, 2.39, 6.99, NA, 6.38, 3.98, 
+            NA, 2.88, 17.2, 5.22, NA, 4.03, 2.20, 7.61)
+)
+
+# Text table
+tabletext <- cbind(
+  c("Subgroup", data2$Subgroup),
+  c("Control n/N (%)", data2$Control),
+  c("Intervention n/N (%)", data2$Intervention),
+  c("Adjusted OR (95% CI)", data2$OR),
+  c("P-interaction", data2$P_interaction)
+)
+
+n_rows <- nrow(tabletext)
+
+# Forest map
+forest_appoint <- forestplot(
+  labeltext = tabletext,
+  graph.pos = 4,
+  mean = c(NA, data2$mean),
+  lower = c(NA, data2$lower),
+  upper = c(NA, data2$upper),
+  is.summary = c(TRUE, rep(FALSE, nrow(data2))),
+  xlog = FALSE,
+  col = fpColors(
+    box = "black", 
+    line = "black", 
+    summary = "black",
+    hrz_lines = "black"
+  ),
+  txt_gp = fpTxtGp(
+    label = gpar(fontfamily = "serif", cex = 0.9, fontface = "plain"),
+    ticks = gpar(fontfamily = "serif", cex = 0.8),
+    xlab = gpar(fontfamily = "serif", cex = 1),
+  ),
+  boxsize = 0.2,
+  lineheight = unit(0.6, "cm"),
+  line.margin = unit(0.5, "cm"),
+  graphwidth = unit(8, "cm"),
+  colgap = unit(6, "mm"),
+  lwd.ci = 1.5,
+  lwd.xaxis = 1.2,
+  lwd.zero = 1.2,
+  clip = c(0, 10),
+  xticks = c(0, 1, 5, 10),
+  grid.gp = gpar(lty = 2, col = "gray60"),
+  hrzl_lines = list(
+    "1" = gpar(lwd = 1.5, col = "black"),
+    "2" = gpar(lwd = 0.8, col = "gray50")
+  ),
+  ci.vertices = TRUE,
+  ci.vertices.height = 0.15,
+  zero = 1
+)
+
+print(forest_appoint)
+
+##8 Trend Analysis####
+##8.1 Trends in vaccination rate####
+dose_rate <- alldata %>%
+  group_by(group) %>%  
+  summarise(
+    Baseline = mean(dose_m0 == 1, na.rm = TRUE) * 100,
+    `Midpoint` = mean(dose_m3 == 1, na.rm = TRUE) * 100,
+    `Terminal` = mean(dose_m6 == 1, na.rm = TRUE)  * 100
+  ) %>%
+  tidyr::pivot_longer(
+    cols = c(Baseline, `Midpoint`, `Terminal`), 
+    names_to = "Time", 
+    values_to = "Rate"
+  )
+
+p1 <- ggplot(data = dose_rate,
+             aes(x = Time, y = Rate, group = group, color = group)) +
+  theme_minimal(base_family = 'serif') +
+  geom_hline(yintercept = 0, linetype = 2, linewidth = 0.5) + 
+  geom_line(position = position_dodge(0.1), linewidth = 1.0) +
+  geom_point(size = 3.0, position = position_dodge(0.1)) +
+  geom_text(aes(label = sprintf("%.1f", Rate)), 
+            position = position_dodge(0.1), 
+            vjust = -1.5,          
+            size = 3.5, 
+            family = "serif", 
+            show.legend = FALSE) +
+  scale_y_continuous(limits = c(0, 17),
+                     breaks = seq(0, 15, by = 5), 
+                     expand = c(0, 0),
+                     labels = function(x) sprintf("%.0f", x)) + 
+  scale_color_manual(values = c("#5494cc", "#f9cc52")) +
+  labs(title = "Vaccine uptake") +
+  theme(plot.title = element_text(family = 'serif', 
+                                  size = 14, 
+                                  hjust = 0.5, 
+                                  margin = margin(b = 10))) +
+  theme(
+    axis.title = element_blank(),       
+    axis.text = element_text(family = 'serif', size = 12, colour = 'black'),
+    axis.text.x = element_blank(),
+    text = element_text(family = "serif"),
+    plot.title = element_text(family = "serif"),
+    legend.text = element_text(family = "serif")
+  ) +
+  theme(legend.position = 'none')
+p1
+
+##8.2 Trends in vaccination willingness rate####
+alldata_del <- alldata %>% filter(appoint_m0 != 1)
+will_rate <- alldata_del %>%
+  group_by(group) %>%  
+  summarise(
+    Baseline = mean(will_m0 == 1, na.rm = TRUE) * 100,
+    `Midpoint` = mean(will_m3 == 1, na.rm = TRUE) * 100,
+    `Terminal` = mean(will_m6 == 1, na.rm = TRUE) * 100
+  ) %>%
+  tidyr::pivot_longer(cols = c(Baseline, `Midpoint`, `Terminal`), 
+                      names_to = "Time", 
+                      values_to = "Rate")
+
+# An asterisk (*) indicates statistical significance
+midpoint_x <- "Midpoint"
+
+p2 <- ggplot(data = will_rate,
+             aes(x = Time, y = Rate, group = group, color = group)) +
+  theme_minimal(base_family = 'serif') +
+  geom_hline(yintercept = 0, linetype = 2, linewidth = 0.5) +
+  geom_line(position = position_dodge(0.1), linewidth = 1.0) +
+  geom_point(size = 3.0) +
+  geom_text(aes(label = sprintf("%.1f", Rate)), 
+            position = position_dodge(0.1), 
+            vjust = -1.5,          
+            size = 3.5, 
+            family = "serif", 
+            show.legend = FALSE) + 
+  geom_text(aes(x = midpoint_x, y = 90, label = "*"), 
+            inherit.aes = TRUE,  
+            color = "black", 
+            size = 5, 
+            vjust = 0.5, 
+            hjust = 0.5,
+            show.legend = FALSE) +
+  scale_y_continuous(limits = c(0, 100),
+                     breaks = seq(0, 90, by = 30.0), 
+                     expand = c(0, 0),
+                     labels = function(x) sprintf("%.0f", x)) + 
+  scale_color_manual(values = c("#5494cc", "#f9cc52")) +
+  labs(title = "Intention to uptake") +
+  theme(plot.title = element_text(family = 'serif', 
+                                  size = 14, 
+                                  hjust = 0.5, 
+                                  margin = margin(b = 10))) +
+  theme(
+    axis.title = element_blank(), 
+    axis.text = element_text(family = 'serif', size = 12, colour = 'black'),
+    axis.text.x = element_blank(),
+    text = element_text(family = "serif"),
+    plot.title = element_text(family = "serif"),
+    legend.text = element_text(family = "serif")
+  ) +
+  theme(legend.position = 'none')
+p2
+
+##8.3 Trends in appointment rate####
+appoint_rate <- alldata_del %>%
+  group_by(group) %>%  
+  summarise(
+    Baseline = mean(appoint_m0 == 1, na.rm = TRUE) * 100,
+    `Midpoint` = mean(appoint_m3 == 1, na.rm = TRUE) * 100,
+    `Terminal` = mean(appoint_m6 == 1, na.rm = TRUE) * 100
+  ) %>%
+  tidyr::pivot_longer(cols = c(Baseline, `Midpoint`, `Terminal`), 
+                      names_to = "Time", 
+                      values_to = "Rate")
+
+# # An asterisk (*) indicates statistical significance
+terminal_x <- "Terminal"
+
+p3 <- ggplot(data = appoint_rate,
+             aes(x = Time, y = Rate, group = group, color = group)) +
+  theme_minimal(base_family = 'serif') +
+  geom_hline(yintercept = 0, linetype = 2, linewidth = 0.5) + 
+  geom_line(position = position_dodge(0.1), linewidth = 1.0) +
+  geom_point(size = 3.0) +
+  geom_text(aes(label = sprintf("%.1f", Rate)), 
+            position = position_dodge(0.1), 
+            vjust = -1.5,          
+            size = 3.5, 
+            family = "serif", 
+            show.legend = FALSE) +
+  geom_text(aes(x = terminal_x, y = 12.5, label = "*"), 
+            inherit.aes = TRUE,  
+            color = "black", 
+            size = 5, 
+            vjust = 0.5, 
+            hjust = 0.5,
+            show.legend = FALSE) +
+  scale_y_continuous(limits = c(-2, 16),
+                     breaks = seq(0, 15, by = 5.0), 
+                     expand = c(0, 0),
+                     labels = function(x) sprintf("%.0f", x)) + 
+  scale_color_manual(
+    name = "Group",  
+    values = c("#5494cc", "#f9cc52"),
+    labels = c("Control", "Intervention")  
+  ) +
+  labs(title = "Appointment scheduling",
+       y = "Change from baseline",
+       x = "Time") +
+  theme(plot.title = element_text(family = 'serif', 
+                                  size = 14, 
+                                  hjust = 0.5, 
+                                  margin = margin(b = 10))) +
+  theme(
+    axis.title = element_blank(),
+    axis.text = element_text(family = 'serif', size = 12, colour = 'black'),
+    text = element_text(family = "serif"),
+    plot.title = element_text(family = "serif"),
+    legend.text = element_text(family = "serif", size = 12),
+    legend.title = element_text(family = "serif", size = 12, face = "bold")
+  ) +
+  theme(legend.position = "bottom",
+        legend.justification = c(2.65, -2.5),
+        legend.margin = margin(t = 15, r = 0, b = 25, l = 0),
+        legend.box.spacing = unit(0.8, "cm"))
+p3
+
+##8.4 Trends in HPV-related knowledge scores####
+score_stats <- alldata_del %>%
+  group_by(group) %>%  
+  summarise(
+    Baseline_mean = mean(score_m0, na.rm = TRUE),
+    Baseline_sd = sd(score_m0, na.rm = TRUE),
+    
+    Midpoint_mean = mean(score_m3, na.rm = TRUE),
+    Midpoint_sd = sd(score_m3, na.rm = TRUE),
+    
+    Terminal_mean = mean(score_m6, na.rm = TRUE),
+    Terminal_sd = sd(score_m6, na.rm = TRUE),
+  ) %>%
+  tidyr::pivot_longer(
+    cols = -group,
+    names_to = c("Time", ".value"),
+    names_sep = "_"
+  ) %>%
+  mutate(Time = factor(Time, levels = c("Baseline", "Midpoint", "Terminal")))
+
+# Plotting a line chart with error bars
+p4 <- ggplot(data = score_stats,
+             aes(x = Time, y = mean, group = group, colour = group)) +
+  theme_minimal(base_family = 'serif') +
+  geom_hline(yintercept = 0, linetype = 2, linewidth = 0.5) +  
+  geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd),  
+                width = 0.2,  
+                position = position_dodge(0.1),
+                linewidth = 0.8) +
+  geom_line(position = position_dodge(0.1), linewidth = 1.0) +
+  geom_point(size = 3.0, position = position_dodge(0.1)) +
+  geom_text(aes(label = sprintf("%.1f", mean)), 
+            position = position_dodge(0.1), 
+            vjust = -1.5,         
+            size = 3.5, 
+            family = "serif", 
+            show.legend = FALSE) +
+  scale_y_continuous(limits = c(-0.8, 6.5),  
+                     breaks = seq(0, 6, by = 2.0), 
+                     expand = c(0, 0),
+                     labels = function(x) sprintf("%.0f", x)) + 
+  scale_color_manual(values = c("#5494cc", "#f9cc52")) +
+  labs(title = "HPV-related knowledge",
+       y = "Change from baseline",
+       x = "Time") +
+  theme(plot.title = element_text(family = 'serif', 
+                                  size = 14, 
+                                  hjust = 0.5, 
+                                  margin = margin(b = 10))) +
+  theme(
+    axis.title = element_blank(), 
+    axis.text = element_text(family = 'serif', size = 12, colour = 'black'),
+    text = element_text(family = "serif"),
+    plot.title = element_text(family = "serif"),
+    legend.text = element_text(family = "serif"),
+  ) +
+  theme(legend.position = 'none')
+p4
+
+##8.5 Merge figures####
+p5 <- (p1 | p2) / 
+  (p3 | p4) +
+  plot_layout(heights = c(1, 1)) +
+  plot_annotation(theme = theme(plot.margin = margin(1.5, 1.0, 1.0, 1.0, 'cm')))
+
+grid.newpage()
+# Draw Figure 2
+vp_main <- viewport(x = 0.55, y = 0.5, width = 0.9, height = 0.9)
+pushViewport(vp_main)
+grid.draw(patchwork::patchworkGrob(p5))  
+popViewport()
+
+# Add a Y-axis label
+vp_title <- viewport(x = 0.1, y = 0.5, width = 0.16, height = 0.16)
+pushViewport(vp_title)
+grid.text("Change from baseline", 
+          rot = 90,
+          gp = gpar(fontfamily = "serif", fontsize = 16, fontface = "bold"))
+popViewport()
+
+# Add the X-axis label "Time"
+vp_x_title <- viewport(x = 0.55, y = 0.21, width = 0.2, height = 0.1)  
+pushViewport(vp_x_title)
+grid.text("Time", 
+          gp = gpar(fontfamily = "serif", fontsize = 16, fontface = "bold"))
+popViewport()
+
+##9 Comparison of the lost-to-follow-up cohort with the baseline group####
+miss_data <- alldata %>% filter(is.na(dose_m6))#n=45
+miss_data <- miss_data[, c("group","grade","age","race","p2_1", "p2_5", "p2_7")]
+miss_data <- miss_data %>% mutate(group_miss = 'yes')
+
+analysis_data <- sub_alldata[, c("group","grade","age","race","p2_1", "p2_5", "p2_7")]
+analysis_data <- analysis_data %>% mutate(group_miss = 'no')
+
+analysis_df <- rbind(miss_data, analysis_data)
+
+tabone_anl <- CreateTableOne(
+  vars = c("group","grade","age","race","p2_1", "p2_5", "p2_7"),
+  data = analysis_df,
+  strata = 'group_miss',
+  factorVars = categ,
+  addOverall = TRUE,
+  smd = FALSE)
+
+tabone_anl <- print(tabone_anl,
+                    contDigits = 1, 
+                    catDigits = 1,
+                    pDigits = 3,
+                    showAllLevels = TRUE)
+
+##10 Adherence and recall outcomes by schools####
+adherence_data <- sub_alldata[,c("id_student","group","school","p2_1_m3","p2_2_m3","p2_3a_m3","p2_3b_m3","p2_3c_m3","p2_3d_m3","recall_score")]
+colnames(adherence_data)
+adherence_data <- adherence_data %>% filter(group == 'intervention')
+summary(adherence_data$p2_2_m3)
+adherence_data <- adherence_data %>% filter(!is.na(p2_2_m3)) #n=605
+
+# Output table
+myVars <- c("p2_1_m3","p2_2_m3","p2_3a_m3","p2_3b_m3","p2_3c_m3","p2_3d_m3","recall_score")
+catVars <- c("p2_1_m3","p2_2_m3","p2_3a_m3","p2_3b_m3","p2_3c_m3","p2_3d_m3")
+
+table1 <- CreateTableOne(vars = myVars,
+                         strata = "school",
+                         data = adherence_data,
+                         factorVars = catVars,
+                         addOverall = TRUE,
+                         smd = FALSE)
+table1 <- print(table1, 
+                contDigits = 1, 
+                catDigits = 1, 
+                pDigits = 4, 
+                showAllLevels = TRUE, 
+                printToggle = FALSE)
+
+##11 HPV vaccine-related outcomes across control and intervention schools####
+myVars <- c("dose_m6","appoint_m6","will_m6","score_m6")
+catVars <- c("dose_m6","appoint_m6","will_m6")
+table2 <- CreateTableOne(vars = myVars,
+                         strata = "school",
+                         data = sub_alldata,
+                         factorVars = catVars,
+                         addOverall = TRUE,
+                         smd = FALSE)
+table2 <- print(table2, 
+                contDigits = 1, 
+                catDigits = 1, 
+                pDigits = 4, 
+                showAllLevels = TRUE, 
+                printToggle = FALSE)
+
+table3 <- CreateTableOne(vars = myVars,
+                         strata = "school",
+                         data = sub_alldata_del,
+                         factorVars = catVars,
+                         addOverall = TRUE,
+                         smd = FALSE)
+table3 <- print(table3, 
+                contDigits = 1, 
+                catDigits = 1, 
+                pDigits = 4, 
+                showAllLevels = TRUE, 
+                printToggle = FALSE)
+
+##12 Intervention effects on responses to HPV-related knowledge questions####
+formulas <- list(
+  q1_m6 ~ group + economic + q1 + (1 | school),
+  q2_m6 ~ group + economic + q2 + (1 | school),
+  q3_m6 ~ group + economic + q3 + (1 | school),
+  q4_m6 ~ group + economic + q4 + (1 | school),
+  q5_m6 ~ group + economic + q5 + (1 | school),
+  q6_m6 ~ group + economic + (1 | school),#no one answered it correctly in the baseline study
+  q7_m6 ~ group + economic + q7 + (1 | school)
+)
+names(formulas) <- paste0("q", 1:7, "_m6")
+
+# Iterative fitting model
+results_q <- do.call(rbind, lapply(names(formulas), function(m) {
+  fit <- glmer(
+    formulas[[m]],
+    data = sub_alldata_del,
+    family = binomial(link = "logit"),
+    control = glmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 2e5)),
+    na.action = na.omit
+  )
+  
+  tidy(fit, conf.int = TRUE, conf.method = "Wald", exponentiate = TRUE) %>%
+    mutate(Model = m, .before = 1) 
+}))
+
+print(results_q)
+
+# tableone
+tabone_q <- CreateTableOne(
+  vars = c("q1", "q2", "q3", "q4", "q5", "q6","q7",
+           "q1_m6","q2_m6","q3_m6","q4_m6","q5_m6","q6_m6","q7_m6"),
+  strata = 'group',
+  data = sub_alldata_del,
+  addOverall = TRUE,
+  smd = FALSE)
+
+tabone_q <- print(tabone_q,
+                  contDigits = 2, 
+                  catDigits = 1,
+                  pDigits = 3,
+                  showAllLevels = TRUE)
